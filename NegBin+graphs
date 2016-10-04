@@ -1,0 +1,81 @@
+# NBD regression to test if international is significant factor in citas/paper
+# read data and load packages
+setwd("~/Colaboración Externa")
+data <- read.csv('CitaPerPaper.csv')
+require(foreign)
+require(ggplot2)
+require(MASS)
+summary(data)
+
+# histogram of citas/paper by country
+ggplot(data, aes(Citations.per.Publication, fill = Country)) +
+  geom_histogram(binwidth=1) +
+  facet_grid(Country ~ ., margins = TRUE, scales = "free")
+# too many results
+
+# retry with two groups: national or international
+ggplot(data, aes(Citations.per.Publication, fill = Mexico)) +
+  geom_histogram(binwidth=1) +
+  facet_grid(Mexico ~ ., margins = TRUE, scales = "free")
+
+# Calculate mean and standard deviation of national and international collaboration
+with(data, tapply(Citations.per.Publication, Mexico, function(x) {
+  sprintf("M (SD) = %1.2f (%1.2f)", mean(x), sd(x))
+}))
+#                        0                        1 
+# "M (SD) = 11.07 (15.40)"   "M (SD) = 1.97 (1.35)"
+
+# modelo 1 with each Country as a factor
+summary(nbdreg1 <- glm.nb(Citations.per.Publication ~ Mexico + Country, data = data))
+
+# modelo 2 only Mexico as factor
+summary(nbdreg1 <- glm.nb(Citations.per.Publication ~ Mexico, data = data))
+#Deviance Residuals: 
+#  Min       1Q   Median       3Q      Max  
+#-1.8513  -1.2148  -0.5114   0.1799   2.6365  
+#
+#Coefficients:
+#             Estimate Std. Error z value Pr(>|z|)    
+#(Intercept)  2.40416    0.05805   41.42  < 2e-16 ***
+#Mexico      -1.72727    0.27682   -6.24 4.39e-10 ***
+# Coefficient Estimates represent log-counts.
+# exp(1.72727)=5.63
+#Carrying the indicator Mexico is associated with expecting 5.6 fewer citations/paper
+
+
+# Test if Mexico is significant
+nbdreg2 <- update(nbdreg1, . ~ . - Mexico)
+summary(nbdreg2)
+anova(nbdreg1, nbdreg2)
+#### Output  ####
+#Likelihood ratio tests of Negative Binomial Models
+
+#Response: Citations.per.Publication
+#Model     theta Resid. df    2 x log-lik.   Test    df LR stat.      Pr(Chi)
+#1      1 0.5414042       580       -3846.019                                   
+#2 Mexico 0.5672522       579       -3818.443 1 vs 2     1  27.5766 1.509944e-07
+# ^^neat compression trick above :) I have a date to a wedding this weekend :)) JA
+# Yes, Mexico is significant
+
+# confidence interval
+(CI <- cbind(Estimate = coef(nbdreg2), confint(nbdreg2)))
+
+#incidence ratio
+exp(-1.72727)
+# [1] 0.1777691
+# The incidence rate for citations on national collaboration is 0.18 the incidence rate
+# for citations on international collaborations. 
+#Citations accumulate 5 times faster on international collaboration
+###-----------------------------------------------------------------------------------------
+  Está bien. I used working directory. I showed that Mexico is a significant variable in the 
+model. The problem is that the model is not as realistic as it could be.
+1. The model does not consider time. Citations accumulate over time. The function assumes 
+that all observations of citations occurred instantaneously in one period.
+2. The model takes universities as individuals. The process implied is that each university
+has an inherent citation generating capability, and that this capability varies based on 
+Mexico or not Mexico. This makes it more difficult to incorporate time into the model because
+it would need to be done from the first collaborative publication, but collaboration is not
+done consistently over time. The second problem is that many universities contribute to the
+same paper. For example, over 50 universities worked on a paper with 40 citations.
+3. No continuous or other variables included. Co-authors at Tec or Views Per Publication could
+be useful.
